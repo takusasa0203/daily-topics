@@ -3,33 +3,31 @@
 
 import os
 import re
+import time
 from typing import List, Dict, Tuple, Any
 from google import genai
 
-MODEL_CANDIDATE = "gemini-3.8-flash"
+MODEL_NAME = "gemini-3.8-flash"
 
-def call_gemini(client: genai.Client, prompt: str) -> str:
-    """Gemini APIを呼び出してテキストを生成する。"""
-    try:
-        response = client.models.generate_content(
-            model=MODEL_CANDIDATE,
-            contents=prompt,
-        )
-        return response.text or ""
-    except Exception as e:
-        print(f"モデル '{MODEL_CANDIDATE}' 呼び出しエラー: {e}")
-        # フォールバック
-        for fb in ["gemini-3-flash", "gemini-2.5-flash"]:
-            try:
-                print(f"フォールバック試行: {fb}")
-                response = client.models.generate_content(
-                    model=fb,
-                    contents=prompt,
-                )
-                return response.text or ""
-            except Exception:
-                continue
-        raise e
+def call_gemini(client: genai.Client, prompt: str, max_retries: int = 5) -> str:
+    """Gemini APIを呼び出し、503（混雑・高負荷）や429（レート制限）が出た場合は自動でリトライする。"""
+    delay = 3
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=prompt,
+            )
+            return response.text or ""
+        except Exception as e:
+            err_msg = str(e)
+            print(f"API呼び出し失敗 (試行 {attempt}/{max_retries}): {err_msg[:120]}")
+            if attempt == max_retries:
+                raise e
+            print(f"一時的な高負荷またはレート制限のため、{delay}秒待機して再試行します...")
+            time.sleep(delay)
+            delay = min(delay * 2, 30)  # 3秒 -> 6秒 -> 12秒 -> 24秒 -> 30秒
+
 
 def generate_podcast_dialogue(
     categorized_articles: Dict[str, List[Dict[str, str]]],
@@ -101,6 +99,7 @@ def generate_podcast_dialogue(
 長さの目安: 約1,800文字〜2,000文字の充実した長い掛け合い。話を端折らず、ディープに議論してください。
 """
     domestic_res = call_gemini(client, prompt_domestic)
+    time.sleep(2)
 
     # --- チャプター3: 海外・国際情勢深掘り (約5〜6分、約1,800文字) ---
     print("チャプター3: 海外・国際情勢深掘り対話を生成中...")
@@ -116,6 +115,7 @@ def generate_podcast_dialogue(
 長さの目安: 約1,800文字〜2,000文字の充実した長い掛け合い。ディープに議論してください。
 """
     world_res = call_gemini(client, prompt_world)
+    time.sleep(2)
 
     # --- チャプター4: テック・AI最前線深掘り (約6〜7分、約2,000文字) ---
     print("チャプター4: テック・AI最前線深掘り対話を生成中...")
@@ -131,6 +131,7 @@ def generate_podcast_dialogue(
 長さの目安: 約2,000文字〜2,200文字の最も濃密な掛け合い。
 """
     tech_res = call_gemini(client, prompt_tech)
+    time.sleep(2)
 
     # --- チャプター5: エンディング (約1.5〜2分、約500文字) ---
     print("チャプター5: エンディング対話を生成中...")
@@ -141,6 +142,8 @@ def generate_podcast_dialogue(
 長さの目安: 約500文字程度（KeitaとNanamiの掛け合いで6〜8往復程度）。
 """
     ending_res = call_gemini(client, prompt_ending)
+    time.sleep(2)
+
 
     # 全対話テキストの合体とパース
     combined_raw_text = f"{opening_res}\n{domestic_res}\n{world_res}\n{tech_res}\n{ending_res}"
