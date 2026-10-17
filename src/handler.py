@@ -15,12 +15,13 @@ from tts import synthesize_podcast
 class PodcastHandler:
     """ポッドキャスト生成・保存・インデックス更新を一元管理するハンドラークラス。"""
 
-    def __init__(self, config: Dict[str, Any], base_dir: Optional[str] = None):
+    def __init__(self, config: Dict[str, Any], base_dir: Optional[str] = None, output_dir: Optional[str] = None):
         self.config = config
         self.base_dir = base_dir or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        self.digests_dir = os.path.join(self.base_dir, "digests")
+        self.digests_dir = output_dir if output_dir else os.path.join(self.base_dir, "digests")
         self.readme_path = os.path.join(self.base_dir, "README.md")
         os.makedirs(self.digests_dir, exist_ok=True)
+
 
     def get_current_time(self) -> datetime:
         """設定されたタイムゾーンの現在日時を取得する。"""

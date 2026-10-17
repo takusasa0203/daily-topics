@@ -23,6 +23,8 @@ def parse_args() -> argparse.Namespace:
                         help="Run topic fetching without calling Gemini API or Edge-TTS")
     parser.add_argument("--config", type=str, default=None,
                         help="Path to custom config.yaml")
+    parser.add_argument("--output-dir", type=str, default=None,
+                        help="Directory to save generated markdown and audio files")
     return parser.parse_args()
 
 def main():
@@ -30,8 +32,9 @@ def main():
     args = parse_args()
     config = load_config(args.config)
 
-    handler = PodcastHandler(config)
+    handler = PodcastHandler(config, output_dir=args.output_dir)
     handler.run(edition=args.edition, dry_run=args.dry_run)
+
 
 if __name__ == "__main__":
     main()
