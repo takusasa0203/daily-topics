@@ -1,0 +1,57 @@
+# ============================================================
+# Daily Topic Podcast Configuration
+# ============================================================
+
+general:
+  model: "gemini-3.8-flash"
+  target_duration_minutes: 20
+  timezone: "Asia/Tokyo"
+
+# パーソナリティ設定 (Edge-TTS の日本語ボイスを使用)
+speakers:
+  host1:
+    name: "Keita"
+    voice: "ja-JP-KeitaNeural"
+    role: "解説役（落ち着いたトーン、背景やポイントを解説）"
+  host2:
+    name: "Nanami"
+    voice: "ja-JP-NanamiNeural"
+    role: "進行役（明るく親しみやすい、素朴な疑問や相槌を挟む）"
+
+# 配信エディション設定
+editions:
+  morning:
+    trigger_hour_limit: 13
+    greeting: "おはようございます！"
+    tone: "今日1日の動きを見据えたエネルギッシュなトーン"
+  evening:
+    trigger_hour_limit: 24
+    greeting: "お疲れ様です！"
+    tone: "今日1日の出来事を振り返りリラックスして聴けるトーン"
+
+# ニュース・トピック収集ソース
+categories:
+  domestic:
+    name: "国内ニュース"
+    limit_per_feed: 4
+    feeds:
+      - name: "Yahoo!ニュース (主要)"
+        url: "https://news.yahoo.co.jp/rss/topics/top-picks.xml"
+      - name: "Google News (日本・国内)"
+        url: "https://news.google.com/rss/headlines/section/topic/NATION?hl=ja&gl=JP&ceid=JP:ja"
+  world:
+    name: "海外・国際情勢"
+    limit_per_feed: 4
+    feeds:
+      - name: "Google News (国際)"
+        url: "https://news.google.com/rss/headlines/section/topic/WORLD?hl=ja&gl=JP&ceid=JP:ja"
+      - name: "BBC News (日本語版)"
+        url: "https://feeds.bbci.co.uk/japanese/rss.xml"
+  tech:
+    name: "最新テック・AIトレンド"
+    limit_per_feed: 4
+    feeds:
+      - name: "Google News (テクノロジー)"
+        url: "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=ja&gl=JP&ceid=JP:ja"
+      - name: "はてなブックマーク (テクノロジー人気エントリー)"
+        url: "https://b.hatena.ne.jp/hotentry/it.rss"

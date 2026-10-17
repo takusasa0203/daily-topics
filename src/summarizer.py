@@ -4,18 +4,17 @@
 import os
 import re
 import time
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Tuple, Any, Optional
 from google import genai
+from config_loader import load_config
 
-MODEL_NAME = "gemini-3.8-flash"
-
-def call_gemini(client: genai.Client, prompt: str, max_retries: int = 5) -> str:
+def call_gemini(client: genai.Client, prompt: str, model_name: str = "gemini-3.8-flash", max_retries: int = 5) -> str:
     """Gemini APIを呼び出し、503（混雑・高負荷）や429（レート制限）が出た場合は自動でリトライする。"""
     delay = 3
     for attempt in range(1, max_retries + 1):
         try:
             response = client.models.generate_content(
-                model=MODEL_NAME,
+                model=model_name,
                 contents=prompt,
             )
             return response.text or ""
@@ -26,43 +25,53 @@ def call_gemini(client: genai.Client, prompt: str, max_retries: int = 5) -> str:
                 raise e
             print(f"一時的な高負荷またはレート制限のため、{delay}秒待機して再試行します...")
             time.sleep(delay)
-            delay = min(delay * 2, 30)  # 3秒 -> 6秒 -> 12秒 -> 24秒 -> 30秒
-
+            delay = min(delay * 2, 30)
 
 def generate_podcast_dialogue(
     categorized_articles: Dict[str, List[Dict[str, str]]],
     target_date: str,
-    edition: str = "morning"
+    edition: str = "morning",
+    config: Optional[Dict[str, Any]] = None
 ) -> Tuple[str, List[Dict[str, str]]]:
-    """「国内」「海外」「テック系」の3大ジャンルを元に、
-    20分のNotebookLM風2人掛け合い対話台本と、Markdownレポートを生成する。
-    """
+    """設定（config.yaml）に基づいて、20分のNotebookLM風2人掛け合い対話台本と、Markdownレポートを生成する。"""
+    if config is None:
+        config = load_config()
+
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("環境変数 'GEMINI_API_KEY' が設定されていません。")
 
     client = genai.Client(api_key=api_key)
 
+    model_name = config.get("general", {}).get("model", "gemini-3.8-flash")
+    host1 = config.get("speakers", {}).get("host1", {"name": "Keita", "role": "解説役"})
+    host2 = config.get("speakers", {}).get("host2", {"name": "Nanami", "role": "進行役"})
+
+    host1_name = host1.get("name", "Keita")
+    host2_name = host2.get("name", "Nanami")
+    host1_role = host1.get("role", "解説役")
+    host2_role = host2.get("role", "進行役")
+
+    edition_conf = config.get("editions", {}).get(edition, {})
     is_morning = (edition == "morning")
     edition_label = "朝の便" if is_morning else "夕方の便"
-    greeting = "おはようございます！" if is_morning else "お疲れ様です！"
-    tone_desc = "今日1日の動きを見据えたエネルギッシュなトーン" if is_morning else "今日1日の出来事を振り返りリラックスして聴けるトーン"
+    greeting = edition_conf.get("greeting", "おはようございます！" if is_morning else "お疲れ様です！")
+    tone_desc = edition_conf.get("tone", "今日1日の動きを見据えたエネルギッシュなトーン")
 
     system_context = f"""あなたはGoogle NotebookLMスタイルの本格的なポッドキャスト番組のプロデューサー兼脚本家です。
 2人の人気パーソナリティによる自然で魅力的な掛け合い台本を作成してください。
 
 【パーソナリティ設定】
-- **Keita（ケイタ・男性）**: 落ち着いたトーンで、IT・経済・時事に詳しい解説役。「実はこの背景には〜」「ここが重要なポイントでね」
-- **Nanami（ナナミ・女性）**: 明るく親しみやすく、視聴者の目線で相槌や素朴な疑問を投げかける進行役。「なるほど！」「それって一般の生活にはどう影響するの？」
+- **{host1_name}**: {host1_role}
+- **{host2_name}**: {host2_role}
 
 【出力ルール】
-- 各行は必ず「Keita: セリフ」または「Nanami: セリフ」で始めてください。
+- 各行は必ず「{host1_name}: セリフ」または「{host2_name}: セリフ」で始めてください。
 - 音声合成（TTS）で読み上げるため、Markdown装飾（**や#など）やURL、絵文字は一切含めず、純粋な話し言葉のみにしてください。
 - アルファベットの略語や専門用語は、耳で聞いてわかりやすい読み（例: AIはエーアイ、ITはアイティー、SDVはエス・ディー・ブイなど）を意識してください。
 - 相槌（「へぇー！」「確かに！」「それは気になるね」など）や自然な掛け合いをふんだんに盛り込み、聞き飽きないテンポの良い会話にしてください。
 """
 
-    # 1. 各ジャンルの記事テキスト整形
     def format_articles(articles: List[Dict[str, str]]) -> str:
         res = ""
         for idx, a in enumerate(articles, 1):
@@ -75,17 +84,18 @@ def generate_podcast_dialogue(
 
     all_dialogue_lines: List[Dict[str, str]] = []
 
-    # --- チャプター1: オープニング (約1.5〜2分、約500文字) ---
+    # チャプター1: オープニング
     print("チャプター1: オープニング対話を生成中...")
     prompt_opening = f"""{system_context}
 
 本日（{target_date}）の{edition_label}（{tone_desc}）のオープニングトークを作成してください。
 冒頭の挨拶（「{greeting}」）、日付、今日のラインナップ（国内・海外・テックの3大ジャンルをたっぷり約20分で深掘りすること）を魅力的に紹介してください。
-長さの目安: 約500文字程度（KeitaとNanamiの掛け合いで6〜8往復程度）。
+長さの目安: 約500文字程度（{host1_name}と{host2_name}の掛け合いで6〜8往復程度）。
 """
-    opening_res = call_gemini(client, prompt_opening)
+    opening_res = call_gemini(client, prompt_opening, model_name=model_name)
+    time.sleep(2)
 
-    # --- チャプター2: 国内ニュース深掘り (約5〜6分、約1,800文字) ---
+    # チャプター2: 国内ニュース深掘り
     print("チャプター2: 国内ニュース深掘り対話を生成中...")
     prompt_domestic = f"""{system_context}
 
@@ -98,10 +108,10 @@ def generate_podcast_dialogue(
 
 長さの目安: 約1,800文字〜2,000文字の充実した長い掛け合い。話を端折らず、ディープに議論してください。
 """
-    domestic_res = call_gemini(client, prompt_domestic)
+    domestic_res = call_gemini(client, prompt_domestic, model_name=model_name)
     time.sleep(2)
 
-    # --- チャプター3: 海外・国際情勢深掘り (約5〜6分、約1,800文字) ---
+    # チャプター3: 海外・国際情勢深掘り
     print("チャプター3: 海外・国際情勢深掘り対話を生成中...")
     prompt_world = f"""{system_context}
 
@@ -114,10 +124,10 @@ def generate_podcast_dialogue(
 
 長さの目安: 約1,800文字〜2,000文字の充実した長い掛け合い。ディープに議論してください。
 """
-    world_res = call_gemini(client, prompt_world)
+    world_res = call_gemini(client, prompt_world, model_name=model_name)
     time.sleep(2)
 
-    # --- チャプター4: テック・AI最前線深掘り (約6〜7分、約2,000文字) ---
+    # チャプター4: テック・AI最前線深掘り
     print("チャプター4: テック・AI最前線深掘り対話を生成中...")
     prompt_tech = f"""{system_context}
 
@@ -130,40 +140,40 @@ def generate_podcast_dialogue(
 
 長さの目安: 約2,000文字〜2,200文字の最も濃密な掛け合い。
 """
-    tech_res = call_gemini(client, prompt_tech)
+    tech_res = call_gemini(client, prompt_tech, model_name=model_name)
     time.sleep(2)
 
-    # --- チャプター5: エンディング (約1.5〜2分、約500文字) ---
+    # チャプター5: エンディング
     print("チャプター5: エンディング対話を生成中...")
     prompt_ending = f"""{system_context}
 
 番組のエンディングトークです。
-本日取り上げた国内・海外・テックの全体の総括や、二人のちょっとした雑談（朝なら「今日も一日頑張りましょう！」、夕方なら「今日も一日お疲れ様でした、良い夜を」など）、次回の案内（明日の朝便/夕便もお楽しみに）を入れて締めくくってください。
-長さの目安: 約500文字程度（KeitaとNanamiの掛け合いで6〜8往復程度）。
+本日取り上げた国内・海外・テックの全体の総括や、二人のちょっとした雑談、次回の案内を入れて締めくくってください。
+長さの目安: 約500文字程度（{host1_name}と{host2_name}の掛け合いで6〜8往復程度）。
 """
-    ending_res = call_gemini(client, prompt_ending)
+    ending_res = call_gemini(client, prompt_ending, model_name=model_name)
     time.sleep(2)
 
-
-    # 全対話テキストの合体とパース
     combined_raw_text = f"{opening_res}\n{domestic_res}\n{world_res}\n{tech_res}\n{ending_res}"
+
+    h1_pattern = re.escape(host1_name)
+    h2_pattern = re.escape(host2_name)
+    pattern = re.compile(rf"^({h1_pattern}|{h2_pattern})[:：]\s*(.+)$", re.IGNORECASE)
 
     for line in combined_raw_text.split("\n"):
         line = line.strip()
         if not line:
             continue
-        # "Keita:" や "Nanami:" の抽出
-        match = re.match(r"^(Keita|Nanami|ケイタ|ナナミ)[:：]\s*(.+)$", line, re.IGNORECASE)
+        match = pattern.match(line)
         if match:
-            spk_raw = match.group(1).lower()
-            speaker = "Keita" if "kei" in spk_raw or "ケイ" in spk_raw else "Nanami"
+            spk_matched = match.group(1)
+            speaker = host1_name if spk_matched.lower() == host1_name.lower() else host2_name
             text = match.group(2).strip()
-            # 記号除去
             text = re.sub(r"[\*#_`]", "", text)
             if text:
                 all_dialogue_lines.append({"speaker": speaker, "text": text})
 
-    # --- 6. Markdownレポートの生成 ---
+    # Markdown レポート生成
     print("Markdown サマリーレポートを生成中...")
     prompt_md = f"""あなたは敏腕ニュースエディターです。
 本日（{target_date}）の{edition_label}で配信したポッドキャストのWeb掲載用まとめ記事（Markdown）を作成してください。
@@ -190,6 +200,6 @@ def generate_podcast_dialogue(
 ## 💻 最新テック・AIトレンド
 - テクノロジーの注目動向と考察
 """
-    markdown_report = call_gemini(client, prompt_md)
+    markdown_report = call_gemini(client, prompt_md, model_name=model_name)
 
     return markdown_report, all_dialogue_lines
