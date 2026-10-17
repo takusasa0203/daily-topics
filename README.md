@@ -1,45 +1,46 @@
 # daily-topic-summary
 
-毎朝Geminiで最新トピックを要約し、音声ダイジェスト（mp3）とともに自動保存するリポジトリです。GitHub Actions の cron スケジュールにより、完全自動で実行されます。
+朝夕2回（7:00 / 18:00）、Gemini と Edge-TTS による **2人のホストによる約20分のNotebookLM風対話ポッドキャスト** を完全自動で生成・配信・蓄積するリポジトリです。
 
-## 概要
+## 🎧 番組の特徴
 
-- **自動スケジュール**: 毎朝定時（日本時間 朝7:00等）に GitHub Actions が自動起動
-- **トピック収集**: 指定したニュース・RSSから最新の重要トピックを自動取得
-- **Gemini 要約**: Google Gemini API を使用して、要点を分かりやすくまとめたサマリーを作成
-- **音声生成**: 自然な日本語音声（Edge-TTS）でダイジェスト音声（.mp3）を自動生成
-- **自動アーカイブ**: 生成されたテキストと音声ファイルを `digests/` フォルダへ自動コミット＆プッシュ
+- **朝夕2回の完全自動配信**:
+  - **🌅 朝の便（JST 7:00）**: 今日1日の動きを見据えたエネルギッシュなトークで、通勤・朝の準備中に先取り情報収集。
+  - **🌆 夕方の便（JST 18:00）**: 1日の主要な出来事を振り返り、リラックスして聴ける夜のまとめトーク。
+- **3大ジャンルを徹底深掘り（約20分）**:
+  - 🇯🇵 **国内ニュース**: 国内の政治・経済・社会の注目トピック
+  - 🌍 **海外・国際情勢**: 世界の主要ニュース・国際関係・グローバルトレンド
+  - 💻 **最新テック・AI最前線**: AI、最新ガジェット、開発者トレンド、Webの話題
+- **NotebookLM スタイルの2人掛け合い対話**:
+  - **Keita（ケイタ・男性）**: 落ち着いたトーンで背景やポイントを解説
+  - **Nanami（ナナミ・女性）**: 視聴者目線で素朴な疑問やリアクションを挟む進行役
+- **全編テキスト書き起こし（トランスクリプト）付き**:
+  - 音声だけでなく、記事リンク付きのMarkdownサマリーと全文対話ログを同時に保存。
 
-## 📢 最近のダイジェスト
+## 📢 最近のポッドキャスト
 <!-- LATEST_DIGESTS -->
 - 📅 [2026-10-17](digests/2026-10-17.md) ([🎙 音声を聞く](digests/2026-10-17.mp3))
+
 ## ディレクトリ構成
 
 ```
 daily-topic-summary/
 ├── .github/
 │   └── workflows/
-│       └── daily_digest.yml   # 毎朝実行されるGitHub Actions定義
-├── digests/                   # 日々の要約Markdownと音声mp3が蓄積される場所
+│       └── daily_digest.yml   # 朝7時・夕18時の定時実行＆手動実行
+├── digests/                   # ポッドキャストmp3とMarkdown書き起こしの保存場所
 ├── src/
-│   ├── fetcher.py             # トピック取得処理
-│   ├── summarizer.py          # Gemini API要約処理
-│   ├── tts.py                 # 音声合成（Edge-TTS）処理
+│   ├── fetcher.py             # 国内・海外・テックの各RSS収集
+│   ├── summarizer.py          # Gemini APIによる20分対話台本＆サマリー生成
+│   ├── tts.py                 # Edge-TTSによる2話者並行音声合成＆結合
 │   └── main.py                # 実行エントリーポイント
 ├── requirements.txt           # 必要パッケージ一覧
 └── README.md
 ```
 
-## 初期セットアップ
+## セットアップ & 設定
 
-### 1. Gemini API キーの登録
-1. [Google AI Studio](https://aistudio.google.com/) から API キーを取得します。
-2. GitHubリポジトリの **Settings** > **Secrets and variables** > **Actions** を開きます。
-3. **New repository secret** をクリックし、以下を登録します：
-   - Name: `GEMINI_API_KEY`
-   - Secret: 取得したAPIキー
-
-### 2. GitHub Actions の書き込み権限設定
-GitHub Actions からリポジトリへ自動コミット・プッシュできるようにするため：
-1. リポジトリの **Settings** > **Actions** > **General** を開きます。
-2. **Workflow permissions** で **Read and write permissions** を選択し、**Save** をクリックします。
+1. **Gemini API キーの登録**:
+   * GitHub リポジトリの **Settings** > **Secrets and variables** > **Actions** に `GEMINI_API_KEY` を登録します。
+2. **Workflow 書き込み権限**:
+   * **Settings** > **Actions** > **General** の **Workflow permissions** で「Read and write permissions」を有効にします。
