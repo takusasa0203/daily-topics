@@ -26,7 +26,8 @@ def fetch_topics(limit_per_feed: int = 5) -> List[Dict[str, str]]:
         feed_name = feed_info["name"]
         url = feed_info["url"]
         try:
-            parsed = feedparser.parse(url)
+            parsed = feedparser.parse(url, agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+
             count = 0
             for entry in parsed.entries:
                 title = entry.get("title", "").strip()

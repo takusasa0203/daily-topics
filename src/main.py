@@ -6,9 +6,15 @@ import sys
 from datetime import datetime
 import pytz
 
+# カレントディレクトリに関わらず src 直下のモジュールを確実にロードできるようにする
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+if CURRENT_DIR not in sys.path:
+    sys.path.insert(0, CURRENT_DIR)
+
 from fetcher import fetch_topics
 from summarizer import generate_summary
 from tts import text_to_speech
+
 
 def get_jst_now() -> datetime:
     """日本時間（JST）の現在日時を取得する。"""
