@@ -44,18 +44,26 @@ def generate_summary(articles: List[Dict[str, str]], target_date: str) -> Tuple[
 - 長さは1分〜2分程度（約400〜600文字）でコンパクトにまとめてください。
 """
 
-    # 利用可能な標準モデル: gemini-2.0-flash, gemini-1.5-flash
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-        )
-    except Exception as e:
-        print(f"gemini-2.0-flash 呼び出し失敗 ({e})。gemini-1.5-flash にフォールバックします。")
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=prompt,
-        )
+    # API推奨のモデル: gemini-3.8-flash
+    model_candidates = ["gemini-3.8-flash", "gemini-3-flash", "gemini-2.5-flash"]
+    response = None
+    last_error = None
+
+    for model_name in model_candidates:
+        try:
+            print(f"モデル '{model_name}' で要約を試行中...")
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
+            print(f"-> モデル '{model_name}' で生成に成功しました。")
+            break
+        except Exception as e:
+            print(f"モデル '{model_name}' 呼び出し失敗: {e}")
+            last_error = e
+
+    if not response:
+        raise last_error or RuntimeError("すべてのモデル候補で生成に失敗しました。")
 
 
     response_text = response.text or ""
