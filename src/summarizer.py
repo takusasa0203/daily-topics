@@ -7,25 +7,71 @@ import time
 from typing import List, Dict, Tuple, Any, Optional
 from google import genai
 from config_loader import load_config
+from enum import Enum, auto
 
-def call_gemini(client: genai.Client, prompt: str, model_name: str = "gemini-3.8-flash", max_retries: int = 5) -> str:
-    """Gemini APIを呼び出し、503（混雑・高負荷）や429（レート制限）が出た場合は自動でリトライする。"""
+
+class ErrorKind(Enum):
+    RATE_LIMIT = auto()       # 短時間のレート制限
+    QUOTA_EXCEEDED = auto()  # 日次クォータ超過
+    AUTH = auto()            # APIキー・権限
+    INVALID_REQUEST = auto()
+    TRANSIENT = auto()       # 一時的なサーバー・通信エラー
+    UNKNOWN = auto()
+
+
+def classify_gemini_error(e: Exception) -> ErrorKind:
+    status = getattr(e, "code", None)
+    err_msg = str(e)
+
+    if status == 429 and ("quota" in err_msg or "per day" in err_msg):
+        return ErrorKind.QUOTA_EXCEEDED
+    if status == 429:
+        return ErrorKind.RATE_LIMIT
+    if status in (401, 403):
+        return ErrorKind.AUTH
+    if status == 400:
+        return ErrorKind.INVALID_REQUEST
+    if status in (500, 502, 503, 504):
+        return ErrorKind.TRANSIENT
+    return ErrorKind.UNKNOWN
+
+
+def call_gemini(
+    client: genai.Client,
+    prompt: str,
+    model_name: str = "gemini-3.8-flash",
+    max_retries: int = 5,
+) -> str:
     delay = 3
-    for attempt in range(1, max_retries + 1):
+
+    for attempt in range(max_retries + 1):
         try:
             response = client.models.generate_content(
                 model=model_name,
                 contents=prompt,
             )
             return response.text or ""
+
         except Exception as e:
-            err_msg = str(e)
-            print(f"API呼び出し失敗 (試行 {attempt}/{max_retries}): {err_msg[:120]}")
+            kind = classify_gemini_error(e)
+
+            if kind == ErrorKind.QUOTA_EXCEEDED:
+                print("API利用上限のため失敗")
+                raise
+
+            if kind not in (ErrorKind.RATE_LIMIT, ErrorKind.TRANSIENT):
+                raise
+
             if attempt == max_retries:
-                raise e
-            print(f"一時的な高負荷またはレート制限のため、{delay}秒待機して再試行します...")
+                print(f"再試行上限に達しました: {e}")
+                raise
+
+            print(f"API呼び出し失敗（試行 {
+                  attempt + 1}/{max_retries + 1}）: {str(e)[:120]}")
+            print(f"{delay}秒待って再試行します...")
             time.sleep(delay)
             delay = min(delay * 2, 30)
+
 
 def generate_podcast_dialogue(
     categorized_articles: Dict[str, List[Dict[str, str]]],
@@ -44,8 +90,10 @@ def generate_podcast_dialogue(
     client = genai.Client(api_key=api_key)
 
     model_name = config.get("general", {}).get("model", "gemini-3.8-flash")
-    host1 = config.get("speakers", {}).get("host1", {"name": "Keita", "role": "解説役"})
-    host2 = config.get("speakers", {}).get("host2", {"name": "Nanami", "role": "進行役"})
+    host1 = config.get("speakers", {}).get(
+        "host1", {"name": "Keita", "role": "解説役"})
+    host2 = config.get("speakers", {}).get(
+        "host2", {"name": "Nanami", "role": "進行役"})
 
     host1_name = host1.get("name", "Keita")
     host2_name = host2.get("name", "Nanami")
@@ -55,7 +103,8 @@ def generate_podcast_dialogue(
     edition_conf = config.get("editions", {}).get(edition, {})
     is_morning = (edition == "morning")
     edition_label = "朝の便" if is_morning else "夕方の便"
-    greeting = edition_conf.get("greeting", "おはようございます！" if is_morning else "お疲れ様です！")
+    greeting = edition_conf.get(
+        "greeting", "おはようございます！" if is_morning else "お疲れ様です！")
     tone_desc = edition_conf.get("tone", "今日1日の動きを見据えたエネルギッシュなトーン")
 
     system_context = f"""あなたはGoogle NotebookLMスタイルの本格的なポッドキャスト番組のプロデューサー兼脚本家です。
@@ -75,7 +124,8 @@ def generate_podcast_dialogue(
     def format_articles(articles: List[Dict[str, str]]) -> str:
         res = ""
         for idx, a in enumerate(articles, 1):
-            res += f"{idx}. [{a['source']}] {a['title']}\n   要約: {a.get('summary', '')[:100]}\n"
+            res += f"{idx}. [{a['source']}] {a['title']
+                                             }\n   要約: {a.get('summary', '')[:100]}\n"
         return res
 
     domestic_text = format_articles(categorized_articles.get("domestic", []))
@@ -154,11 +204,13 @@ def generate_podcast_dialogue(
     ending_res = call_gemini(client, prompt_ending, model_name=model_name)
     time.sleep(2)
 
-    combined_raw_text = f"{opening_res}\n{domestic_res}\n{world_res}\n{tech_res}\n{ending_res}"
+    combined_raw_text = f"{opening_res}\n{domestic_res}\n{
+        world_res}\n{tech_res}\n{ending_res}"
 
     h1_pattern = re.escape(host1_name)
     h2_pattern = re.escape(host2_name)
-    pattern = re.compile(rf"^({h1_pattern}|{h2_pattern})[:：]\s*(.+)$", re.IGNORECASE)
+    pattern = re.compile(
+        rf"^({h1_pattern}|{h2_pattern})[:：]\s*(.+)$", re.IGNORECASE)
 
     for line in combined_raw_text.split("\n"):
         line = line.strip()
