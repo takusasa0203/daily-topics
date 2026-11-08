@@ -66,8 +66,7 @@ def call_gemini(
                 print(f"再試行上限に達しました: {e}")
                 raise
 
-            print(f"API呼び出し失敗（試行 {
-                  attempt + 1}/{max_retries + 1}）: {str(e)[:120]}")
+            print(f"API呼び出し失敗（試行 {attempt + 1}/{max_retries + 1}）: {str(e)[:120]}")
             print(f"{delay}秒待って再試行します...")
             time.sleep(delay)
             delay = min(delay * 2, 30)
@@ -124,8 +123,7 @@ def generate_podcast_dialogue(
     def format_articles(articles: List[Dict[str, str]]) -> str:
         res = ""
         for idx, a in enumerate(articles, 1):
-            res += f"{idx}. [{a['source']}] {a['title']
-                                             }\n   要約: {a.get('summary', '')[:100]}\n"
+            res += f"{idx}. [{a['source']}] {a['title']}\n   要約: {a.get('summary', '')[:100]}\n"
         return res
 
     domestic_text = format_articles(categorized_articles.get("domestic", []))
@@ -204,8 +202,7 @@ def generate_podcast_dialogue(
     ending_res = call_gemini(client, prompt_ending, model_name=model_name)
     time.sleep(2)
 
-    combined_raw_text = f"{opening_res}\n{domestic_res}\n{
-        world_res}\n{tech_res}\n{ending_res}"
+    combined_raw_text = f"{opening_res}\n{domestic_res}\n{world_res}\n{tech_res}\n{ending_res}"
 
     h1_pattern = re.escape(host1_name)
     h2_pattern = re.escape(host2_name)
