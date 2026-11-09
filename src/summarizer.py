@@ -42,7 +42,7 @@ def call_gemini(
     model_name: str = "gemini-3.8-flash",
     max_retries: int = 5,
 ) -> str:
-    delay = 3
+    delay = 10
 
     for attempt in range(max_retries + 1):
         try:
@@ -69,7 +69,7 @@ def call_gemini(
             print(f"API呼び出し失敗（試行 {attempt + 1}/{max_retries + 1}）: {str(e)[:120]}")
             print(f"{delay}秒待って再試行します...")
             time.sleep(delay)
-            delay = min(delay * 2, 30)
+            delay = min(delay * 2, 120)
 
 
 def generate_podcast_dialogue(
